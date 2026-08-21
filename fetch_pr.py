@@ -4,34 +4,79 @@ import sys
 from datetime import datetime
 import yfinance as yf
 
-# 关注的港美股核心股票池（可随时根据个人需求增删）
-WATCHLIST = [
-    # ─── 美股核心标的 ───
-    {"symbol": "AAPL", "market": "US", "label": "苹果"},
-    {"symbol": "MSFT", "market": "US", "label": "微软"},
-    {"symbol": "GOOGL", "market": "US", "label": "谷歌"},
-    {"symbol": "AMZN", "market": "US", "label": "亚马逊"},
-    {"symbol": "NVDA", "market": "US", "label": "英伟达"},
-    {"symbol": "META", "market": "US", "label": "Meta"},
-    {"symbol": "TSLA", "market": "US", "label": "特斯拉"},
-    {"symbol": "BRK-B", "market": "US", "label": "伯克希尔B"},
+import pandas as pd
+import requests
+
+# 核心自选保底池 (包含重要中概股和一些可能不在指数内的巨头)
+BASE_WATCHLIST = [
     {"symbol": "BABA", "market": "US", "label": "阿里巴巴(美)"},
     {"symbol": "PDD", "market": "US", "label": "拼多多"},
-    {"symbol": "KO", "market": "US", "label": "可口可乐"},
-    {"symbol": "MCD", "market": "US", "label": "麦当劳"},
-
-    # ─── 港股核心标的 (yfinance 中港股代码加 .HK 后缀) ───
+    {"symbol": "JD", "market": "US", "label": "京东"},
+    {"symbol": "NTES", "market": "US", "label": "网易(美)"},
+    {"symbol": "BIDU", "market": "US", "label": "百度(美)"},
+    {"symbol": "TCOM", "market": "US", "label": "携程"},
+    {"symbol": "TSM", "market": "US", "label": "台积电"},
     {"symbol": "0700.HK", "market": "HK", "label": "腾讯控股"},
-    {"symbol": "9988.HK", "market": "HK", "label": "阿里巴巴(港)"},
-    {"symbol": "3690.HK", "market": "HK", "label": "美团"},
-    {"symbol": "1810.HK", "market": "HK", "label": "小米集团"},
-    {"symbol": "0941.HK", "market": "HK", "label": "中国移动"},
+    {"symbol": "9988.HK", "market": "HK", "label": "阿里巴巴-W"},
+    {"symbol": "3690.HK", "market": "HK", "label": "美团-W"},
+    {"symbol": "1810.HK", "market": "HK", "label": "小米集团-W"},
     {"symbol": "1211.HK", "market": "HK", "label": "比亚迪股份"},
+    {"symbol": "0941.HK", "market": "HK", "label": "中国移动"},
     {"symbol": "2318.HK", "market": "HK", "label": "中国平安"},
-    {"symbol": "9999.HK", "market": "HK", "label": "网易"},
-    {"symbol": "0388.HK", "market": "HK", "label": "香港交易所"},
-    {"symbol": "1024.HK", "market": "HK", "label": "快手"},
 ]
+
+def get_dynamic_watchlist():
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始从网络动态抓取各大核心指数成分股名单...")
+    symbols_dict = {}
+    
+    # 1. 添加入保底池
+    for item in BASE_WATCHLIST:
+        symbols_dict[item["symbol"]] = item
+
+    # 2. 抓取标普 500 (S&P 500)
+    try:
+        sp500_url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        sp500_table = pd.read_html(sp500_url)[0]
+        for _, row in sp500_table.iterrows():
+            sym = str(row['Symbol']).replace('.', '-') # BRK.B -> BRK-B
+            name = str(row['Security'])
+            symbols_dict[sym] = {"symbol": sym, "market": "US", "label": name}
+        print(f"✓ 成功抓取 S&P 500 成分股: {len(sp500_table)} 只")
+    except Exception as e:
+        print(f"✗ 抓取 S&P 500 失败: {e}")
+
+    # 3. 抓取纳斯达克 100 (Nasdaq 100)
+    try:
+        ndx_url = 'https://en.wikipedia.org/wiki/Nasdaq-100'
+        ndx_table = pd.read_html(ndx_url)[4]
+        for _, row in ndx_table.iterrows():
+            sym = str(row['Ticker'])
+            name = str(row['Company'])
+            symbols_dict[sym] = {"symbol": sym, "market": "US", "label": name}
+        print(f"✓ 成功抓取 Nasdaq 100 成分股: {len(ndx_table)} 只")
+    except Exception as e:
+        print(f"✗ 抓取 Nasdaq 100 失败: {e}")
+
+    # 4. 抓取恒生指数 (Hang Seng Index)
+    try:
+        hsi_url = 'https://en.wikipedia.org/wiki/Hang_Seng_Index'
+        hsi_table = pd.read_html(hsi_url)[5]
+        # Wikipedia 恒指表格结构可能有变化，通常是 Ticker 列
+        if 'Ticker' in hsi_table.columns:
+            for _, row in hsi_table.iterrows():
+                sym = str(row['Ticker'])
+                name = str(row['Company'])
+                # 维基百科上恒指代码通常是纯数字如 700，需转为 0700.HK
+                if sym.isdigit():
+                    sym = sym.zfill(4) + ".HK"
+                symbols_dict[sym] = {"symbol": sym, "market": "HK", "label": name}
+            print(f"✓ 成功抓取恒生指数成分股")
+    except Exception as e:
+        print(f"✗ 抓取恒生指数失败: {e}")
+
+    final_list = list(symbols_dict.values())
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 动态标的池构建完成，共去重后计 {len(final_list)} 只标的！")
+    return final_list
 
 def format_currency(val):
     if val is None:
@@ -48,7 +93,8 @@ def fetch_and_calculate():
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始获取港美股财务数据与计算市赚率...")
     results = []
 
-    for item in WATCHLIST:
+    watchlist = get_dynamic_watchlist()
+    for item in watchlist:
         symbol = item["symbol"]
         market = item["market"]
         label = item["label"]
