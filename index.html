@@ -7,6 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- 引入 Markdown 渲染库 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root {
       --bg-primary: #0b0f19;
@@ -253,6 +255,87 @@
     .badge-red { background: var(--badge-red-bg); color: var(--badge-red-text); }
     .badge-gray { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
 
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 700px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    .modal-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title { font-size: 18px; font-weight: 700; color: #fff; }
+    .modal-close {
+      background: transparent; border: none; color: var(--text-muted);
+      font-size: 24px; cursor: pointer; transition: color 0.2s;
+    }
+    .modal-close:hover { color: #fff; }
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      line-height: 1.6;
+      font-size: 15px;
+      color: #e2e8f0;
+    }
+    /* Markdown 样式 */
+    .modal-body h1, .modal-body h2, .modal-body h3 { color: #fff; margin-top: 16px; margin-bottom: 8px; }
+    .modal-body p { margin-bottom: 12px; }
+    .modal-body strong { color: var(--accent-blue); }
+    .modal-body ul { margin-left: 20px; margin-bottom: 12px; }
+
+    /* Loading Spinner */
+    .spinner {
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top: 3px solid var(--accent-blue);
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* Settings Button */
+    .settings-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .settings-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
+
+    .badge-green { background: var(--badge-green-bg); color: var(--badge-green-text); }
+    .badge-yellow { background: var(--badge-yellow-bg); color: var(--badge-yellow-text); }
+    .badge-red { background: var(--badge-red-bg); color: var(--badge-red-text); }
+    .badge-gray { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
+
     /* Footer */
     footer {
       margin-top: 24px;
@@ -285,8 +368,13 @@
         <h1>📊 港美股市赚率 (PR) 自动化监控看板</h1>
         <p>基于最新财报数据与动态市值每日自动化计算，直观挖掘被低估的高盈利质量标的</p>
       </div>
-      <div class="formula-tag">
-        <span>市赚率 PR = PE / (ROE × 100)</span>
+      <div style="display: flex; gap: 12px; flex-direction: column; align-items: flex-end;">
+        <div class="formula-tag">
+          <span>市赚率 PR = PE / (ROE × 100)</span>
+        </div>
+        <button class="settings-btn" onclick="openSettings()">
+          ⚙️ 设置 Gemini API Key
+        </button>
       </div>
     </header>
 
@@ -498,6 +586,13 @@
 
         const tagClass = item.market === 'HK' ? 'tag-hk' : 'tag-us';
         const currSign = item.market === 'HK' ? 'HK$' : '$';
+        
+        // 构建 Gemini 分析所需的参数
+        const safeLabel = (item.label || item.name || '').replace(/'/g, "\\'");
+        const safeSymbol = (item.symbol || '').replace(/'/g, "\\'");
+        const safePr = item.pr !== null ? item.pr : '未知';
+        const safePe = item.pe_ttm !== null ? item.pe_ttm : '未知';
+        const safeRoe = item.roe !== null ? item.roe + '%' : '未知';
 
         return `
           <tr>
@@ -505,13 +600,17 @@
               <strong>${item.symbol}</strong>
               <span class="stock-tag ${tagClass}">${item.market}</span>
             </td>
-            <td>
-              <div class="company-title">${item.label || item.name}</div>
+            <td onclick="openAI('${safeLabel}', '${safeSymbol}', '${safePr}', '${safePe}', '${safeRoe}')" 
+                style="cursor: pointer; position: relative; padding-right: 30px;" 
+                title="点击获取 Perplexity 自动深度研报" 
+                onmouseover="this.style.background='rgba(56, 189, 248, 0.1)'" 
+                onmouseout="this.style.background='transparent'">
+              <div class="company-title" style="color: var(--accent-blue); text-decoration: underline dotted;">${item.label || item.name} 🤖</div>
               <div class="company-sub">${item.name || '-'}</div>
             </td>
             <td><strong>${item.price !== null ? currSign + item.price : '-'}</strong></td>
             <td>${item.market_cap_str || '-'}</td>
-            <td>${item.pe_ttm !== null ? item.pe_ttm : '-'}</td>
+            <td>${item.pe_ttm !== null ? item.pe_ttm + 'x' : '-'}</td>
             <td style="color: ${item.roe >= 15 ? 'var(--accent-green)' : 'inherit'}; font-weight: ${item.roe >= 15 ? '700' : 'normal'};">
               ${item.roe !== null ? item.roe + '%' : '-'}
             </td>
@@ -523,6 +622,18 @@
           </tr>
         `;
       }).join('');
+    }
+
+    function openAI(company, symbol, pr, pe, roe) {
+      const promptText = `你是一个专业的顶尖金融分析师。请分析一下公司【${company}】(${symbol})：
+1. 它的主营业务和行业地位是什么？
+2. 结合其最新财报，深度分析一下为什么它的市赚率(PR=PE/ROE)目前是 ${pr}（当前动态市盈率PE是 ${pe}，净资产收益率ROE是 ${roe}）？
+3. 这个估值水平(PR)在目前来看是高估还是低估？为什么？
+请用中文输出，排版清晰美观。`;
+      
+      const encodedPrompt = encodeURIComponent(promptText);
+      const url = `https://www.perplexity.ai/search?q=${encodedPrompt}`;
+      window.open(url, "_blank");
     }
 
     window.addEventListener('DOMContentLoaded', loadData);
