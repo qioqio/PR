@@ -117,15 +117,11 @@ def fetch_and_calculate():
             pe_forward = info.get("forwardPE")
             roe_raw = info.get("returnOnEquity")  # yfinance 返回小数，如 0.25 代表 25%
             pb = info.get("priceToBook")
-            
-            # 处理股息率异常 (yfinance 有时返回 0.05，有时直接返回百分比 5.62)
+            # 处理股息率 (yfinance 当前版本直接返回百分比数值，例如 0.34 代表 0.34%)
             dividend_yield_raw = info.get("dividendYield")
             dividend_yield_pct = None
             if dividend_yield_raw is not None:
-                if dividend_yield_raw > 0.5: # 假设 > 50% 的大概率是已经乘过 100 的数值
-                    dividend_yield_pct = round(dividend_yield_raw, 2)
-                else:
-                    dividend_yield_pct = round(dividend_yield_raw * 100, 2)
+                dividend_yield_pct = round(dividend_yield_raw, 2)
 
             # 计算市赚率 (PR = PE / (ROE * 100))
             # 当 ROE=20% (roe_raw=0.2), PE=15 时, PR = 15 / (0.2 * 100) = 15 / 20 = 0.75
