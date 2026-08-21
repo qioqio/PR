@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>港美股市赚率 (PR) 自动化监控看板</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-card: rgba(23, 32, 54, 0.7);
+      --bg-card-hover: rgba(30, 41, 69, 0.9);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-blue: #38bdf8;
+      --accent-green: #10b981;
+      --accent-yellow: #f59e0b;
+      --accent-red: #ef4444;
+      --badge-green-bg: rgba(16, 185, 129, 0.15);
+      --badge-green-text: #34d399;
+      --badge-yellow-bg: rgba(245, 158, 11, 0.15);
+      --badge-yellow-text: #fbbf24;
+      --badge-red-bg: rgba(239, 68, 68, 0.15);
+      --badge-red-text: #f87171;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at top right, #1e1b4b 0%, #0b0f19 50%, #070a12 100%);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 32px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .title-group h1 {
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 30%, #38bdf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .title-group p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-top: 6px;
+    }
+
+    .formula-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    /* KPI Summary Cards */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      padding: 16px 20px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    .kpi-label { font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-value { font-size: 24px; font-weight: 800; margin-top: 4px; }
+    .kpi-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+    /* Controls Bar */
+    .controls-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 12px 18px;
+      border-radius: 14px;
+      backdrop-filter: blur(12px);
+      margin-bottom: 20px;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.35);
+      color: var(--accent-blue);
+    }
+
+    .search-input {
+      background: rgba(11, 15, 25, 0.8);
+      border: 1px solid var(--border-color);
+      padding: 8px 14px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      min-width: 220px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent-blue);
+    }
+
+    /* Table */
+    .table-wrapper {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      overflow-x: auto;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 14px 18px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    th:hover {
+      color: var(--text-primary);
+    }
+
+    td {
+      padding: 14px 18px;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: var(--bg-card-hover);
+    }
+
+    .stock-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+    }
+    .tag-hk { background: rgba(244, 63, 94, 0.15); color: #fb7185; }
+    .tag-us { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+
+    .company-title {
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .company-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Badges */
+    .pr-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .badge-green { background: var(--badge-green-bg); color: var(--badge-green-text); }
+    .badge-yellow { background: var(--badge-yellow-bg); color: var(--badge-yellow-text); }
+    .badge-red { background: var(--badge-red-bg); color: var(--badge-red-text); }
+    .badge-gray { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .explanation-box {
+      margin-top: 20px;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .explanation-box strong { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="title-group">
+        <h1>📊 港美股市赚率 (PR) 自动化监控看板</h1>
+        <p>基于最新财报数据与动态市值每日自动化计算，直观挖掘被低估的高盈利质量标的</p>
+      </div>
+      <div class="formula-tag">
+        <span>市赚率 PR = PE / (ROE × 100)</span>
+      </div>
+    </header>
+
+    <!-- KPI Summary -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">监控股票池</div>
+        <div class="kpi-value" id="kpi-total" style="color: var(--accent-blue);">-</div>
+        <div class="kpi-sub">覆盖港股与美股核心资产</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">高性价比标的 (PR &lt; 1.0)</div>
+        <div class="kpi-value" id="kpi-undervalued" style="color: var(--accent-green);">-</div>
+        <div class="kpi-sub">低估值 + 高净资产收益率</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">中枢合理 (1.0 ≤ PR ≤ 2.0)</div>
+        <div class="kpi-value" id="kpi-fair" style="color: var(--accent-yellow);">-</div>
+        <div class="kpi-sub">估值与盈利能力相对匹配</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">偏高/透支 (PR &gt; 2.0)</div>
+        <div class="kpi-value" id="kpi-overvalued" style="color: var(--accent-red);">-</div>
+        <div class="kpi-sub">需更高成长性消化溢价</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-bar">
+      <div class="filter-tabs">
+        <button class="tab-btn active" onclick="setFilter('ALL')">全部标的</button>
+        <button class="tab-btn" onclick="setFilter('UNDERVALUED')">🌟 优质低估 (PR &lt; 1)</button>
+        <button class="tab-btn" onclick="setFilter('HIGH_ROE')">🔥 高ROE (&gt; 15%)</button>
+        <button class="tab-btn" onclick="setFilter('HK')">港股 (HK)</button>
+        <button class="tab-btn" onclick="setFilter('US')">美股 (US)</button>
+      </div>
+      <input type="text" id="searchInput" class="search-input" placeholder="🔍 搜索代码 / 公司名称..." oninput="handleSearch()" />
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('symbol')">标的代码 ⇅</th>
+            <th onclick="sortTable('name')">公司简称 ⇅</th>
+            <th onclick="sortTable('price')">最新现价 ⇅</th>
+            <th onclick="sortTable('market_cap')">总市值 ⇅</th>
+            <th onclick="sortTable('pe_ttm')">市盈率 PE(TTM) ⇅</th>
+            <th onclick="sortTable('roe')">ROE(%) ⇅</th>
+            <th onclick="sortTable('pb')">市净率 PB ⇅</th>
+            <th onclick="sortTable('dividend_yield')">股息率 ⇅</th>
+            <th onclick="sortTable('pr')" style="color: var(--accent-blue);">市赚率 (PR) ⇅</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr>
+            <td colspan="9" style="text-align:center; padding: 40px; color: var(--text-muted);">
+              正在加载最新市赚率数据...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Explanation Box -->
+    <div class="explanation-box">
+      <strong>💡 什么是市赚率（PR）？</strong><br/>
+      市赚率（Price-to-Return Ratio, PR = PE / (ROE × 100)）是价值投资中评估企业“性价比”的高效量化指标。<br/>
+      • <strong>PR &lt; 1.0</strong>：代表投资者支付的 PE 估值低于其 ROE 水平，具备极佳的安全边际与盈利复利潜力。<br/>
+      • <strong>1.0 ≤ PR ≤ 2.0</strong>：代表合理定价区间。<br/>
+      • <strong>PR &gt; 2.0</strong>：代表高溢价，需观察未来几年是否有极高业绩增速驱动。
+    </div>
+
+    <footer>
+      <div>自动化服务运行状态：<span style="color: var(--accent-green);">● 定时同步中</span></div>
+      <div id="sync-time">最后更新：-</div>
+    </footer>
+  </div>
+
+  <script>
+    let rawData = [];
+    let currentFilter = 'ALL';
+    let sortKey = 'pr';
+    let sortAsc = true;
+
+    // 预置演示数据（若尚未运行 fetch_pr.py 时提供预览）
+    const fallbackData = {
+      last_sync: "示例预览数据 (请运行 fetch_pr.py 生成真实数据)",
+      data: [
+        { symbol: "0700.HK", name: "腾讯控股", label: "腾讯控股", market: "HK", price: 382.4, market_cap_str: "3.58T", pe_ttm: 19.8, roe: 23.5, pb: 3.8, dividend_yield: 1.1, pr: 0.84, pr_level: "undervalued" },
+        { symbol: "9988.HK", name: "阿里巴巴-W", label: "阿里巴巴(港)", market: "HK", price: 86.5, market_cap_str: "1.65T", pe_ttm: 12.4, roe: 13.8, pb: 1.2, dividend_yield: 2.1, pr: 0.90, pr_level: "undervalued" },
+        { symbol: "AAPL", name: "Apple Inc.", label: "苹果", market: "US", price: 226.8, market_cap_str: "3.45T", pe_ttm: 34.2, roe: 147.2, pb: 48.6, dividend_yield: 0.44, pr: 0.23, pr_level: "undervalued" },
+        { symbol: "MSFT", name: "Microsoft Corporation", label: "微软", market: "US", price: 418.5, market_cap_str: "3.11T", pe_ttm: 35.6, roe: 38.4, pb: 11.2, dividend_yield: 0.72, pr: 0.93, pr_level: "undervalued" },
+        { symbol: "GOOGL", name: "Alphabet Inc.", label: "谷歌", market: "US", price: 178.2, market_cap_str: "2.21T", pe_ttm: 23.8, roe: 31.2, pb: 6.8, dividend_yield: 0.45, pr: 0.76, pr_level: "undervalued" },
+        { symbol: "NVDA", name: "NVIDIA Corporation", label: "英伟达", market: "US", price: 128.4, market_cap_str: "3.15T", pe_ttm: 56.4, roe: 115.0, pb: 42.1, dividend_yield: 0.03, pr: 0.49, pr_level: "undervalued" },
+        { symbol: "BRK-B", name: "Berkshire Hathaway Inc.", label: "伯克希尔B", market: "US", price: 450.2, market_cap_str: "980B", pe_ttm: 21.0, roe: 14.5, pb: 1.6, dividend_yield: 0.0, pr: 1.45, pr_level: "fair" },
+        { symbol: "TSLA", name: "Tesla, Inc.", label: "特斯拉", market: "US", price: 214.0, market_cap_str: "680B", pe_ttm: 62.5, roe: 17.8, pb: 9.8, dividend_yield: 0.0, pr: 3.51, pr_level: "overvalued" }
+      ]
+    };
+
+    function loadData() {
+      fetch('data.json')
+        .then(r => {
+          if (!r.ok) throw new Error('data.json not found');
+          return r.json();
+        })
+        .then(payload => renderDashboard(payload))
+        .catch(err => {
+          console.warn('使用预置演示数据展示:', err);
+          renderDashboard(fallbackData);
+        });
+    }
+
+    function renderDashboard(payload) {
+      rawData = payload.data || [];
+      document.getElementById('sync-time').innerText = '最后数据同步：' + (payload.last_sync || '-');
+
+      // 更新 KPI
+      const total = rawData.length;
+      const undervalued = rawData.filter(d => d.pr !== null && d.pr < 1.0).length;
+      const fair = rawData.filter(d => d.pr !== null && d.pr >= 1.0 && d.pr <= 2.0).length;
+      const overvalued = rawData.filter(d => d.pr !== null && d.pr > 2.0).length;
+
+      document.getElementById('kpi-total').innerText = total;
+      document.getElementById('kpi-undervalued').innerText = undervalued;
+      document.getElementById('kpi-fair').innerText = fair;
+      document.getElementById('kpi-overvalued').innerText = overvalued;
+
+      renderTable();
+    }
+
+    function setFilter(filterType) {
+      currentFilter = filterType;
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      renderTable();
+    }
+
+    function handleSearch() {
+      renderTable();
+    }
+
+    function sortTable(key) {
+      if (sortKey === key) {
+        sortAsc = !sortAsc;
+      } else {
+        sortKey = key;
+        sortAsc = true;
+      }
+      renderTable();
+    }
+
+    function renderTable() {
+      const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+      let list = [...rawData];
+
+      // 筛选
+      if (currentFilter === 'UNDERVALUED') {
+        list = list.filter(d => d.pr !== null && d.pr < 1.0);
+      } else if (currentFilter === 'HIGH_ROE') {
+        list = list.filter(d => d.roe !== null && d.roe >= 15);
+      } else if (currentFilter === 'HK') {
+        list = list.filter(d => d.market === 'HK');
+      } else if (currentFilter === 'US') {
+        list = list.filter(d => d.market === 'US');
+      }
+
+      // 搜索
+      if (keyword) {
+        list = list.filter(d => 
+          (d.symbol && d.symbol.toLowerCase().includes(keyword)) ||
+          (d.name && d.name.toLowerCase().includes(keyword)) ||
+          (d.label && d.label.toLowerCase().includes(keyword))
+        );
+      }
+
+      // 排序
+      list.sort((a, b) => {
+        let va = a[sortKey];
+        let vb = b[sortKey];
+        if (va === null || va === undefined) return 1;
+        if (vb === null || vb === undefined) return -1;
+        if (typeof va === 'string') {
+          return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        }
+        return sortAsc ? va - vb : vb - va;
+      });
+
+      const tbody = document.getElementById('table-body');
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 30px; color: var(--text-muted);">未找到符合条件的股票数据</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(item => {
+        let badgeClass = 'badge-gray';
+        let levelText = item.pr ?? 'N/A';
+
+        if (item.pr !== null) {
+          if (item.pr < 1.0) {
+            badgeClass = 'badge-green';
+          } else if (item.pr <= 2.0) {
+            badgeClass = 'badge-yellow';
+          } else {
+            badgeClass = 'badge-red';
+          }
+        }
+
+        const tagClass = item.market === 'HK' ? 'tag-hk' : 'tag-us';
+        const currSign = item.market === 'HK' ? 'HK$' : '$';
+
+        return `
+          <tr>
+            <td>
+              <strong>${item.symbol}</strong>
+              <span class="stock-tag ${tagClass}">${item.market}</span>
+            </td>
+            <td>
+              <div class="company-title">${item.label || item.name}</div>
+              <div class="company-sub">${item.name || '-'}</div>
+            </td>
+            <td><strong>${item.price !== null ? currSign + item.price : '-'}</strong></td>
+            <td>${item.market_cap_str || '-'}</td>
+            <td>${item.pe_ttm !== null ? item.pe_ttm : '-'}</td>
+            <td style="color: ${item.roe >= 15 ? 'var(--accent-green)' : 'inherit'}; font-weight: ${item.roe >= 15 ? '700' : 'normal'};">
+              ${item.roe !== null ? item.roe + '%' : '-'}
+            </td>
+            <td>${item.pb !== null ? item.pb : '-'}</td>
+            <td>${item.dividend_yield !== null ? item.dividend_yield + '%' : '-'}</td>
+            <td>
+              <span class="pr-badge ${badgeClass}">${levelText}</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    window.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>
