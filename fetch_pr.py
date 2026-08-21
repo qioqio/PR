@@ -6,7 +6,7 @@ import yfinance as yf
 
 import pandas as pd
 import requests
-
+import io
 # 核心自选保底池 (包含重要中概股和一些可能不在指数内的巨头)
 BASE_WATCHLIST = [
     {"symbol": "BABA", "market": "US", "label": "阿里巴巴(美)"},
@@ -33,10 +33,13 @@ def get_dynamic_watchlist():
     for item in BASE_WATCHLIST:
         symbols_dict[item["symbol"]] = item
 
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
     # 2. 抓取标普 500 (S&P 500)
     try:
         sp500_url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        sp500_table = pd.read_html(sp500_url)[0]
+        resp = requests.get(sp500_url, headers=headers)
+        sp500_table = pd.read_html(io.StringIO(resp.text))[0]
         for _, row in sp500_table.iterrows():
             sym = str(row['Symbol']).replace('.', '-') # BRK.B -> BRK-B
             name = str(row['Security'])
@@ -48,7 +51,8 @@ def get_dynamic_watchlist():
     # 3. 抓取纳斯达克 100 (Nasdaq 100)
     try:
         ndx_url = 'https://en.wikipedia.org/wiki/Nasdaq-100'
-        ndx_table = pd.read_html(ndx_url)[4]
+        resp = requests.get(ndx_url, headers=headers)
+        ndx_table = pd.read_html(io.StringIO(resp.text))[4]
         for _, row in ndx_table.iterrows():
             sym = str(row['Ticker'])
             name = str(row['Company'])
@@ -60,7 +64,8 @@ def get_dynamic_watchlist():
     # 4. 抓取恒生指数 (Hang Seng Index)
     try:
         hsi_url = 'https://en.wikipedia.org/wiki/Hang_Seng_Index'
-        hsi_table = pd.read_html(hsi_url)[5]
+        resp = requests.get(hsi_url, headers=headers)
+        hsi_table = pd.read_html(io.StringIO(resp.text))[5]
         # Wikipedia 恒指表格结构可能有变化，通常是 Ticker 列
         if 'Ticker' in hsi_table.columns:
             for _, row in hsi_table.iterrows():
@@ -112,7 +117,15 @@ def fetch_and_calculate():
             pe_forward = info.get("forwardPE")
             roe_raw = info.get("returnOnEquity")  # yfinance 返回小数，如 0.25 代表 25%
             pb = info.get("priceToBook")
-            dividend_yield = info.get("dividendYield")  # 如 0.015 代表 1.5%
+            
+            # 处理股息率异常 (yfinance 有时返回 0.05，有时直接返回百分比 5.62)
+            dividend_yield_raw = info.get("dividendYield")
+            dividend_yield_pct = None
+            if dividend_yield_raw is not None:
+                if dividend_yield_raw > 0.5: # 假设 > 50% 的大概率是已经乘过 100 的数值
+                    dividend_yield_pct = round(dividend_yield_raw, 2)
+                else:
+                    dividend_yield_pct = round(dividend_yield_raw * 100, 2)
 
             # 计算市赚率 (PR = PE / (ROE * 100))
             # 当 ROE=20% (roe_raw=0.2), PE=15 时, PR = 15 / (0.2 * 100) = 15 / 20 = 0.75
@@ -146,7 +159,7 @@ def fetch_and_calculate():
                 "pe_forward": round(pe_forward, 2) if pe_forward else None,
                 "roe": roe_pct,
                 "pb": round(pb, 2) if pb else None,
-                "dividend_yield": round(dividend_yield * 100, 2) if dividend_yield else None,
+                "dividend_yield": dividend_yield_pct,
                 "pr": pr,
                 "pr_level": pr_level,
             }
